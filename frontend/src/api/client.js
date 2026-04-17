@@ -1,5 +1,6 @@
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api/v1";
+  console.log("API BASE URL:", API_BASE_URL);
 
 const TOKEN_KEY = "auth_token";
 

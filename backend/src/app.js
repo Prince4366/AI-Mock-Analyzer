@@ -12,12 +12,18 @@ import { sanitizeRequest } from "./middleware/sanitize.js";
 
 export const app = express();
 
-app.use(
-  cors({
-    origin: env.clientOrigin,
-    credentials: true
-  })
-);
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://ai-mock-analyzer.vercel.app"
+];
+
+app.use(cors({
+  origin: true,
+  credentials: true
+}));
+
+app.options("*", cors());
+
 app.use(helmet());
 app.use(morgan(env.nodeEnv === "production" ? "combined" : "dev"));
 app.use(apiRateLimiter);

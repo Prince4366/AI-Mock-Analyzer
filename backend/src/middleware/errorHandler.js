@@ -16,6 +16,8 @@ function normalizeMongooseError(err) {
 }
 
 export function errorHandler(err, _req, res, _next) {
+  console.error("🔥 ERROR:", err); // VERY IMPORTANT
+
   if (err.name === "MulterError") {
     return res.status(400).json({
       success: false,
@@ -31,19 +33,8 @@ export function errorHandler(err, _req, res, _next) {
     });
   }
 
-  const statusCode = err.statusCode || 500;
-  const message = err.isOperational
-    ? err.message
-    : "Something went wrong. Please try again later.";
-
-  const payload = {
+  return res.status(err.statusCode || 500).json({
     success: false,
-    message
-  };
-
-  if (env.nodeEnv !== "production") {
-    payload.stack = err.stack;
-  }
-
-  return res.status(statusCode).json(payload);
+    message: err.message || "Internal Server Error"
+  });
 }
