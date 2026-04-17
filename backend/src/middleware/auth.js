@@ -27,5 +27,11 @@ export const protect = asyncHandler(async (req, _res, next) => {
   }
 
   req.user = user;
+  console.info("[auth.protect] Authenticated request", {
+    userId: String(req.user._id),
+    email: req.user.email,
+    method: req.method,
+    path: req.originalUrl
+  });
   next();
 });

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Bar,
   BarChart,
@@ -19,6 +20,7 @@ import { apiRequest } from "../api/client";
 import { ChartSkeleton, Skeleton } from "../components/Skeleton";
 
 export function AnalyticsDashboardPage() {
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [webcamSummary, setWebcamSummary] = useState(null);
   const [speechSummary, setSpeechSummary] = useState(null);
@@ -41,6 +43,7 @@ export function AnalyticsDashboardPage() {
         const query =
           roleTrack === "All" ? "" : `?roleTrack=${encodeURIComponent(roleTrack)}`;
         const response = await apiRequest(`/analytics/dashboard${query}`);
+        console.info("[AnalyticsDashboardPage] Dashboard API response", response);
         const webcam = await apiRequest("/interviews/webcam-summary");
         const speech = await apiRequest("/interviews/speech-summary");
         setData(response);
@@ -80,9 +83,37 @@ export function AnalyticsDashboardPage() {
   }
 
   const charts = data?.charts || {};
+  const hasEvaluationData = Boolean(
+    (charts.overallScoreTrend && charts.overallScoreTrend.length > 0) ||
+      (charts.topicPerformance && charts.topicPerformance.length > 0) ||
+      (charts.weaknessRadar && charts.weaknessRadar.length > 0) ||
+      (charts.interviewTimeline && charts.interviewTimeline.length > 0) ||
+      (charts.improvementOverTime && charts.improvementOverTime.length > 0)
+  );
 
   return (
     <main className="resume-container">
+      <button
+        type="button"
+        aria-label="Go back"
+        onClick={() => navigate(-1)}
+        style={{
+          position: "fixed",
+          top: "72px",
+          left: "12px",
+          width: "40px",
+          height: "40px",
+          padding: 0,
+          borderRadius: "999px",
+          zIndex: 999,
+          background: "var(--surface)",
+          color: "var(--text)",
+          border: "1px solid var(--border)",
+          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.25)"
+        }}
+      >
+        ←
+      </button>
       <div className="resume-card analytics-card">
         <h1>Analytics Dashboard</h1>
         <label htmlFor="roleFilter">Role Track</label>
@@ -100,6 +131,14 @@ export function AnalyticsDashboardPage() {
             </option>
           ))}
         </select>
+
+        {!hasEvaluationData && (
+          <section className="preview-section">
+            <p className="helper-text">
+              No data yet. Complete an interview to see analytics.
+            </p>
+          </section>
+        )}
 
         <section className="preview-section">
           <h2>Confidence & Posture Summary</h2>

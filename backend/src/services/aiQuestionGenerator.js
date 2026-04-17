@@ -24,8 +24,15 @@ function buildPrompt({
   difficulty,
   questionCount,
   adaptiveContext,
-  roleTrack
+  roleTrack,
+  avoidQuestions
 }) {
+  const trimmedAvoidList = (avoidQuestions || [])
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .slice(0, 30);
+  const randomnessSeed = Math.random().toString(36).slice(2, 10);
+
   return `
 You are an interview expert. Generate personalized interview questions using the candidate profile and job description.
 
@@ -46,7 +53,10 @@ Rules:
 - If adaptive context is provided, align challenge to it.
 - Role track: ${roleTrack}
 - Questions must be concrete, role-specific, and non-generic.
+- Do not repeat any question that appears in "Avoid Previously Asked Questions".
+- Ensure each generated question is unique within this same response.
 - Do not add markdown/code-fences or extra text.
+- Use this variation seed to diversify wording and scenarios: ${randomnessSeed}
 
 Candidate Resume Signals:
 - Skills: ${(resume.skills || []).join(", ") || "N/A"}
@@ -64,6 +74,9 @@ ${adaptiveContext || "No adaptive context provided"}
 
 Role-Specific Interview Guidance:
 ${ROLE_PROMPT_GUIDANCE[roleTrack] || ROLE_PROMPT_GUIDANCE["Software Engineer"]}
+
+Avoid Previously Asked Questions:
+${trimmedAvoidList.length > 0 ? trimmedAvoidList.map((q) => `- ${q}`).join("\n") : "None"}
 `;
 }
 
@@ -80,6 +93,7 @@ function normalizeQuestions(rawQuestions, fallbackDifficulty) {
   const allowedCategory = new Set(["technical", "hr", "behavioral"]);
   const allowedDifficulty = new Set(["Easy", "Medium", "Hard", "Expert"]);
 
+  const seen = new Set();
   const normalized = rawQuestions
     .map((item) => ({
       category: String(item.category || "").toLowerCase(),
@@ -90,7 +104,15 @@ function normalizeQuestions(rawQuestions, fallbackDifficulty) {
     .map((item) => ({
       ...item,
       difficulty: allowedDifficulty.has(item.difficulty) ? item.difficulty : fallbackDifficulty
-    }));
+    }))
+    .filter((item) => {
+      const key = item.question.toLowerCase();
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
 
   if (normalized.length === 0) {
     throw new AppError("AI returned invalid questions format", 502);
@@ -173,7 +195,8 @@ export async function generateInterviewQuestions({
   difficulty,
   questionCount,
   adaptiveContext = "",
-  roleTrack = "Software Engineer"
+  roleTrack = "Software Engineer",
+  avoidQuestions = []
 }) {
   const prompt = buildPrompt({
     resume,
@@ -181,7 +204,8 @@ export async function generateInterviewQuestions({
     difficulty,
     questionCount,
     adaptiveContext,
-    roleTrack
+    roleTrack,
+    avoidQuestions
   });
   let rawText;
 

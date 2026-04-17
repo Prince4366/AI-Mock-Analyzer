@@ -7,8 +7,10 @@ import { getSemanticSimilarityScore } from "./semanticSimilarity.js";
 import { withRetry } from "../utils/retry.js";
 
 function buildPrompt({ question, expectedAnswer, userAnswer }) {
+  const hasExpectedAnswer = Boolean(String(expectedAnswer || "").trim());
   return `
-Evaluate the interview answer against the question and expected answer.
+Evaluate the interview answer against the question.
+${hasExpectedAnswer ? "Use the expected answer as the benchmark." : "Infer an ideal benchmark answer from the question before scoring."}
 
 Return strict JSON only using this schema:
 {
@@ -36,7 +38,7 @@ Question:
 ${question}
 
 Expected Answer:
-${expectedAnswer}
+${hasExpectedAnswer ? expectedAnswer : "Not provided"}
 
 User Answer:
 ${userAnswer}
@@ -160,7 +162,8 @@ async function generateWithGemini(prompt) {
 }
 
 export async function evaluateInterviewAnswer({ question, expectedAnswer, userAnswer }) {
-  const prompt = buildPrompt({ question, expectedAnswer, userAnswer });
+  const benchmarkAnswer = String(expectedAnswer || "").trim() || String(question || "").trim();
+  const prompt = buildPrompt({ question, expectedAnswer: benchmarkAnswer, userAnswer });
   let rawText;
   if (env.aiProvider === "gemini") {
     try {
@@ -194,7 +197,7 @@ export async function evaluateInterviewAnswer({ question, expectedAnswer, userAn
   }
 
   const normalized = normalizeEvaluation(parsed);
-  const semantic = await getSemanticSimilarityScore(expectedAnswer, userAnswer);
+  const semantic = await getSemanticSimilarityScore(benchmarkAnswer, userAnswer);
 
   // Final score blends rubric quality + semantic alignment:
   // - 70% from LLM rubric score (communication, depth, relevance, completeness)

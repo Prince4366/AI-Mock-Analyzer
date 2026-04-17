@@ -70,12 +70,27 @@ export const generateQuestions = asyncHandler(async (req, res) => {
     throw new AppError("Job description not found", 404);
   }
 
+  const recentSessions = await InterviewSession.find({
+    userId: req.user._id,
+    roleTrack,
+    jobDescriptionId
+  })
+    .sort({ createdAt: -1 })
+    .limit(8)
+    .select("generatedQuestions.question");
+
+  const avoidQuestions = recentSessions
+    .flatMap((session) => session.generatedQuestions || [])
+    .map((item) => String(item?.question || "").trim())
+    .filter(Boolean);
+
   const questions = await generateInterviewQuestions({
     resume,
     jobDescription,
     difficulty,
     questionCount: boundedCount,
-    roleTrack
+    roleTrack,
+    avoidQuestions
   });
 
   const session = await InterviewSession.create({
@@ -160,10 +175,11 @@ export const evaluateSessionAnswer = asyncHandler(async (req, res) => {
     throw new AppError("Invalid sessionId", 400);
   }
 
-  const { question, expectedAnswer, userAnswer, questionIndex = -1 } = req.body;
-  if (!question || !expectedAnswer || !userAnswer) {
-    throw new AppError("question, expectedAnswer, and userAnswer are required", 400);
+  const { question, expectedAnswer, userAnswer, questionIndex = -1, speechMetrics } = req.body;
+  if (!question || !userAnswer) {
+    throw new AppError("question and userAnswer are required", 400);
   }
+  const normalizedExpectedAnswer = String(expectedAnswer || "").trim() || String(question).trim();
 
   const session = await InterviewSession.findOne({
     _id: req.params.sessionId,
@@ -182,33 +198,47 @@ export const evaluateSessionAnswer = asyncHandler(async (req, res) => {
 
   const evaluated = await evaluateInterviewAnswer({
     question,
-    expectedAnswer,
+    expectedAnswer: normalizedExpectedAnswer,
     userAnswer
   });
+
+  const confidenceRaw = Number(speechMetrics?.confidenceScore);
+  const hasConfidence = Number.isFinite(confidenceRaw);
+  const clampedConfidence = hasConfidence ? Math.max(0, Math.min(100, confidenceRaw)) : null;
+  const confidenceAsTen = hasConfidence ? Number((clampedConfidence / 10).toFixed(1)) : null;
+  const blendedOverallScore = hasConfidence
+    ? Number((evaluated.overallScore * 0.8 + confidenceAsTen * 0.2).toFixed(1))
+    : evaluated.overallScore;
+  const blendedFeedbackSummary = hasConfidence
+    ? `${evaluated.feedback.summary} Delivery confidence: ${clampedConfidence}/100.`
+    : evaluated.feedback.summary;
 
   const evaluation = await AnswerEvaluation.create({
     userId: req.user._id,
     sessionId: session._id,
     questionIndex,
     question,
-    expectedAnswer,
+    expectedAnswer: normalizedExpectedAnswer,
     userAnswer,
     scoreBreakdown: evaluated.scoreBreakdown,
-    overallScore: evaluated.overallScore,
+    overallScore: blendedOverallScore,
     llmScore: evaluated.llmScore,
     semanticSimilarity: evaluated.semanticSimilarity,
     semanticSimilarityScore: evaluated.semanticSimilarityScore,
-    feedback: evaluated.feedback
+    feedback: {
+      ...evaluated.feedback,
+      summary: blendedFeedbackSummary
+    }
   });
 
   const previousDifficulty = normalizeDifficulty(session.currentDifficulty || session.difficulty);
-  const newDifficulty = adaptDifficulty(previousDifficulty, evaluated.overallScore);
+  const newDifficulty = adaptDifficulty(previousDifficulty, blendedOverallScore);
   session.currentDifficulty = newDifficulty;
   session.difficultyProgression.push({
     questionIndex,
     previousDifficulty,
     newDifficulty,
-    triggerScore: evaluated.overallScore
+    triggerScore: blendedOverallScore
   });
   await session.save();
 
@@ -579,6 +609,20 @@ export const completeInterviewSession = asyncHandler(async (req, res) => {
   }
   await session.save();
 
+  const evaluations = await AnswerEvaluation.find({
+    sessionId: session._id,
+    userId: req.user._id
+  }).select("overallScore");
+  const interviewScoreOutOf10 =
+    evaluations.length === 0
+      ? 0
+      : Number(
+          (
+            evaluations.reduce((sum, item) => sum + Number(item.overallScore || 0), 0) /
+            evaluations.length
+          ).toFixed(1)
+        );
+
   const streak = await registerInterviewCompletion(req.user._id, session.completedAt);
   const newlyAwardedBadges = await autoAwardBadgesForUser(req.user._id);
   const xpProgress = await awardXpForCompletedInterview(req.user._id, session._id);
@@ -592,6 +636,7 @@ export const completeInterviewSession = asyncHandler(async (req, res) => {
       completedAt: session.completedAt,
       webcamAnalytics: session.webcamAnalytics
     },
+    interviewScoreOutOf10,
     streak: {
       currentDailyStreak: streak.currentDailyStreak,
       currentWeeklyStreak: streak.currentWeeklyStreak,

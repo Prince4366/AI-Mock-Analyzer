@@ -53,6 +53,10 @@ export const getLatestWeaknessAnalysis = asyncHandler(async (req, res) => {
 
 export const getDashboardAnalytics = asyncHandler(async (req, res) => {
   const roleTrack = req.query.roleTrack;
+  console.info("[analytics.getDashboardAnalytics] Request received", {
+    userId: String(req.user?._id || ""),
+    roleTrack: roleTrack || "All"
+  });
 
   let evaluationFilter = { userId: req.user._id };
   if (roleTrack) {
@@ -72,7 +76,23 @@ export const getDashboardAnalytics = asyncHandler(async (req, res) => {
   });
 
   if (evaluations.length === 0) {
-    throw new AppError("No interview evaluations found for this user", 404);
+    console.info("[analytics.getDashboardAnalytics] No evaluations found", {
+      userId: String(req.user?._id || ""),
+      roleTrack: roleTrack || "All",
+      evaluationFilter
+    });
+    return res.status(200).json({
+      success: true,
+      roleTrack: roleTrack || "All",
+      charts: {
+        overallScoreTrend: [],
+        topicPerformance: [],
+        weaknessRadar: [],
+        interviewTimeline: [],
+        improvementOverTime: []
+      },
+      recommendations: []
+    });
   }
 
   const analysis = buildWeaknessAnalysis(evaluations);

@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { apiRequest } from "../api/client";
+import { useNavigate } from "react-router-dom";
+import { apiRequest, getToken } from "../api/client";
 import { Skeleton } from "../components/Skeleton";
 
 export function InterviewHistoryPage() {
+  const navigate = useNavigate();
   const [sessions, setSessions] = useState([]);
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [sessionDetail, setSessionDetail] = useState(null);
@@ -18,7 +20,7 @@ export function InterviewHistoryPage() {
     async function loadHistory() {
       try {
         const data = await apiRequest("/interviews/history");
-        setSessions(data.sessions || []);
+        setSessions((data.sessions || []).slice(0, 10));
       } catch (err) {
         setError(err.message || "Failed to load interview history.");
       } finally {
@@ -89,7 +91,7 @@ export function InterviewHistoryPage() {
         throw new Error("Report generation failed.");
       }
 
-      const token = localStorage.getItem("token");
+      const token = getToken();
       const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api/v1";
       const downloadResponse = await fetch(`${baseUrl}/interviews/reports/${reportId}/download`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
@@ -126,6 +128,27 @@ export function InterviewHistoryPage() {
 
   return (
     <main className="resume-container">
+      <button
+        type="button"
+        aria-label="Go back"
+        onClick={() => navigate(-1)}
+        style={{
+          position: "fixed",
+          top: "72px",
+          left: "12px",
+          width: "40px",
+          height: "40px",
+          padding: 0,
+          borderRadius: "999px",
+          zIndex: 999,
+          background: "var(--surface)",
+          color: "var(--text)",
+          border: "1px solid var(--border)",
+          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.25)"
+        }}
+      >
+        ←
+      </button>
       <div className="resume-card analytics-card">
         <h1>Interview History</h1>
         {error && <p className="error-message">{error}</p>}
@@ -157,7 +180,8 @@ export function InterviewHistoryPage() {
           <button
             type="button"
             onClick={handleGenerateAndDownloadReport}
-            disabled={!selectedSessionId || reportBusy}
+            disabled={reportBusy}
+            title={!selectedSessionId ? "Select a session first, then download PDF." : "Download PDF report"}
           >
             {reportBusy ? "Generating PDF..." : "Download Performance PDF Report"}
           </button>

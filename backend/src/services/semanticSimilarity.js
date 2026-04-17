@@ -1,6 +1,5 @@
 import OpenAI from "openai";
 import { env } from "../config/env.js";
-import { AppError } from "../utils/AppError.js";
 import { withRetry } from "../utils/retry.js";
 
 function dot(a, b) {
@@ -28,9 +27,32 @@ function toScoreOutOf10(similarity) {
   return Number((bounded * 10).toFixed(1));
 }
 
+function tokenize(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((token) => token.length > 2);
+}
+
+function lexicalSimilarity(answerA, answerB) {
+  const tokensA = new Set(tokenize(answerA));
+  const tokensB = new Set(tokenize(answerB));
+  if (tokensA.size === 0 && tokensB.size === 0) {
+    return 0;
+  }
+  const intersectionCount = [...tokensA].filter((token) => tokensB.has(token)).length;
+  const unionCount = new Set([...tokensA, ...tokensB]).size;
+  return unionCount === 0 ? 0 : intersectionCount / unionCount;
+}
+
 export async function getSemanticSimilarityScore(answerA, answerB) {
   if (!env.openaiApiKey) {
-    throw new AppError("OPENAI_API_KEY is required for embedding similarity", 500);
+    const similarity01 = lexicalSimilarity(answerA, answerB);
+    return {
+      similarity01: Number(similarity01.toFixed(4)),
+      similarityScore: toScoreOutOf10(similarity01)
+    };
   }
 
   const client = new OpenAI({ apiKey: env.openaiApiKey });

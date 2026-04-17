@@ -23,6 +23,19 @@ function buildRoadmapFromWeaknesses(weakDimensions, weakTopics) {
   return roadmap;
 }
 
+function normalizeRecommendations(recommendations) {
+  return (recommendations || [])
+    .map((item) => {
+      if (!item) return "";
+      if (typeof item === "string") return item.trim();
+      const area = String(item.area || "").trim();
+      const recommendation = String(item.recommendation || "").trim();
+      if (!area && !recommendation) return "";
+      return area ? `${area}: ${recommendation}` : recommendation;
+    })
+    .filter(Boolean);
+}
+
 export async function buildInterviewReportData({ user, session }) {
   const evaluations = await AnswerEvaluation.find({
     userId: user._id,
@@ -76,7 +89,7 @@ export async function buildInterviewReportData({ user, session }) {
       overallScore,
       strengths: strengthsSummary,
       weaknesses: weaknessSummary,
-      recommendations: weaknessAnalysis.recommendations || [],
+      recommendations: normalizeRecommendations(weaknessAnalysis.recommendations),
       roadmap
     },
     questionFeedback,
