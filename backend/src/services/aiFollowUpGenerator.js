@@ -66,10 +66,14 @@ async function withOpenAI(prompt) {
 }
 
 async function withGroq(prompt) {
+
+
   if (!env.groqApiKey) {
     throw new AppError("GROQ_API_KEY is not configured", 500);
   }
+
   const client = new Groq({ apiKey: env.groqApiKey });
+
   const response = await withRetry(() =>
     client.chat.completions.create({
       model: env.groqModel,
@@ -77,6 +81,7 @@ async function withGroq(prompt) {
       messages: [{ role: "user", content: prompt }]
     })
   );
+
   return response.choices?.[0]?.message?.content || "{}";
 }
 
