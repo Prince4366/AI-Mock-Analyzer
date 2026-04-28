@@ -126,7 +126,7 @@ export function useWebcamInterviewAnalytics() {
 
     frameRef.current = requestAnimationFrame(analyzeFrame);
   }, []);
-
+  const isMountedRef = useRef(true);
   const startCamera = useCallback(async () => {
     setIsInitializing(true);
     setError("");
@@ -141,45 +141,73 @@ export function useWebcamInterviewAnalytics() {
       }
 
       videoRef.current.srcObject = stream;
-      await videoRef.current.play();
 
-      const vision = await FilesetResolver.forVisionTasks(
-        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
-      );
+      // wait until video is ACTUALLY ready
+      await new Promise((resolve) => {
+        const video = videoRef.current;
 
-      faceRef.current = await FaceLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath:
-            "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
-        },
-        runningMode: "VIDEO",
-        outputFaceBlendshapes: true,
-        numFaces: 1
-      });
-
-      poseRef.current = await PoseLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath:
-            "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task"
-        },
-        runningMode: "VIDEO",
-        numPoses: 1
+        if (video.readyState >= 2) {
+          resolve();
+        } else {
+          const handler = () => {
+            video.removeEventListener("loadeddata", handler);
+            resolve();
+          };
+          video.addEventListener("loadeddata", handler);
+        }
       });
 
       setIsReady(true);
-      frameRef.current = requestAnimationFrame(analyzeFrame);
-    } catch (err) {
-        console.error("FULL ERROR:", err); 
 
-        setError(`${err.name}: ${err.message}`);
-        stopCamera();
-    } finally {
+      // now safe to load MediaPipe
+      setTimeout(async () => {
+        try {
+          const vision = await FilesetResolver.forVisionTasks(
+            "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+          );
+          if (!isMountedRef.current) return;
+          faceRef.current?.close?.();
+          poseRef.current?.close?.();
+
+          faceRef.current = await FaceLandmarker.createFromOptions(vision, {
+            baseOptions: {
+              modelAssetPath:
+                "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
+            },
+            runningMode: "VIDEO",
+            outputFaceBlendshapes: true,
+            numFaces: 1
+          });
+
+          poseRef.current = await PoseLandmarker.createFromOptions(vision, {
+            baseOptions: {
+              modelAssetPath:
+                "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task"
+            },
+            runningMode: "VIDEO",
+            numPoses: 1
+          });
+          if (!isMountedRef.current) return;
+
+          frameRef.current = requestAnimationFrame(analyzeFrame);
+
+        } catch (e) {
+          console.error("MediaPipe failed:", e);
+        }
+      }, 0);
+    } catch (err) {
+  console.error("Camera init failed:", err);
+  setError(`${err.name}: ${err.message}`);
+  stopCamera();
+}
+    finally {
       setIsInitializing(false);
     }
   }, [analyzeFrame, stopCamera]);
-
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
+      isMountedRef.current = false;
       stopCamera();
       faceRef.current?.close?.();
       poseRef.current?.close?.();
