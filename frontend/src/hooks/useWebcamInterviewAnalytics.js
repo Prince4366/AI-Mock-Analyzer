@@ -169,12 +169,10 @@ export function useWebcamInterviewAnalytics() {
       setIsReady(true);
       frameRef.current = requestAnimationFrame(analyzeFrame);
     } catch (err) {
-      setError(
-        err?.name === "NotAllowedError"
-          ? "Camera access denied. Please allow webcam permission to enable posture/confidence analysis."
-          : "Unable to start webcam analysis. Check camera availability and browser compatibility."
-      );
-      stopCamera();
+        console.error("FULL ERROR:", err); 
+
+        setError(`${err.name}: ${err.message}`);
+        stopCamera();
     } finally {
       setIsInitializing(false);
     }
