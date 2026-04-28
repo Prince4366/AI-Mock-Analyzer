@@ -159,42 +159,48 @@ export function useWebcamInterviewAnalytics() {
 
       setIsReady(true);
 
-      // now safe to load MediaPipe
-      setTimeout(async () => {
-        try {
-          const vision = await FilesetResolver.forVisionTasks(
-            "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
-          );
-          if (!isMountedRef.current) return;
-          faceRef.current?.close?.();
-          poseRef.current?.close?.();
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setTimeout(async () => {
+            try {
+              const vision = await FilesetResolver.forVisionTasks(
+                "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+              );
 
-          faceRef.current = await FaceLandmarker.createFromOptions(vision, {
-            baseOptions: {
-              modelAssetPath:
-                "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
-            },
-            runningMode: "VIDEO",
-            outputFaceBlendshapes: true,
-            numFaces: 1
-          });
+              if (!isMountedRef.current) return;
 
-          poseRef.current = await PoseLandmarker.createFromOptions(vision, {
-            baseOptions: {
-              modelAssetPath:
-                "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task"
-            },
-            runningMode: "VIDEO",
-            numPoses: 1
-          });
-          if (!isMountedRef.current) return;
+              faceRef.current?.close?.();
+              poseRef.current?.close?.();
 
-          frameRef.current = requestAnimationFrame(analyzeFrame);
+              faceRef.current = await FaceLandmarker.createFromOptions(vision, {
+                baseOptions: {
+                  modelAssetPath:
+                    "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
+                },
+                runningMode: "VIDEO",
+                outputFaceBlendshapes: true,
+                numFaces: 1
+              });
 
-        } catch (e) {
-          console.error("MediaPipe failed:", e);
-        }
-      }, 0);
+            poseRef.current = await PoseLandmarker.createFromOptions(vision, {
+              baseOptions: {
+                modelAssetPath:
+                  "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task"
+              },
+              runningMode: "VIDEO",
+              numPoses: 1
+            });
+
+            if (!isMountedRef.current) return;
+
+            frameRef.current = requestAnimationFrame(analyzeFrame);
+
+          } catch (e) {
+            console.error("MediaPipe failed:", e);
+          }
+        }, 200); 
+      });
+    });
     } catch (err) {
   console.error("Camera init failed:", err);
   setError(`${err.name}: ${err.message}`);
